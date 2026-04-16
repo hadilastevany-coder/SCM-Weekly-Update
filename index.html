@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCMWeeklyUpdate</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#F9FAFB;min-height:100vh}
+.nav{background:#fff;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;padding:0 24px;height:54px;gap:4px}
+.nav-brand{font-weight:700;font-size:15px;color:#111827;margin-right:28px;letter-spacing:-0.3px}
+.nav-btn{background:none;border:none;cursor:pointer;padding:0 14px;height:54px;font-size:13.5px;color:#6B7280;border-bottom:2px solid transparent;font-family:inherit}
+.nav-btn.active{color:#3B82F6;border-bottom-color:#3B82F6;font-weight:600}
+.main{max-width:1080px;margin:0 auto;padding:28px 16px}
+.card{background:#fff;border:1px solid #E5E7EB;border-radius:8px}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.summary-card{padding:16px 18px}
+.summary-val{font-size:26px;font-weight:700}
+.summary-label{font-size:12px;color:#6B7280;margin-top:3px}
+.week-nav{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.week-nav h2{font-size:20px;font-weight:700;color:#111827;min-width:200px;text-align:center}
+.nav-arrow{background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:18px;color:#374151;line-height:1}
+.dept-header{background:#F8FAFC;padding:9px 16px;font-weight:600;font-size:13px;color:#374151;border-bottom:1px solid #E5E7EB;border-radius:8px 8px 0 0}
+.dept-body{padding:8px 12px}
+.update-row{display:flex;gap:10px;align-items:flex-start;padding:8px 4px;border-bottom:1px solid #F3F4F6}
+.update-row:last-child{border-bottom:none}
+.badge{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap;margin-top:2px}
+.form-wrap{max-width:580px}
+.form-title{font-size:19px;font-weight:700;color:#111827;margin-bottom:24px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+.field select,.field input,.field textarea{width:100%;padding:8px 10px;border-radius:6px;border:1px solid #D1D5DB;font-size:13px;background:#fff;color:#111827;font-family:inherit}
+.field textarea{resize:vertical}
+.field-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.priority-row{display:flex;gap:8px}
+.pri-btn{flex:1;padding:7px 0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;border:2px solid #E5E7EB;background:#fff;color:#6B7280;font-family:inherit}
+.submit-btn{background:#3B82F6;color:#fff;border:none;border-radius:7px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer;min-width:140px;font-family:inherit}
+.submit-btn.saved{background:#10B981}
+.error-msg{color:#DC2626;font-size:13px;margin-bottom:12px}
+.history-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.export-btn{background:#fff;border:1px solid #D1D5DB;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;color:#374151;font-weight:500;font-family:inherit}
+.refresh-btn{background:#fff;border:1px solid #D1D5DB;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;color:#374151;font-weight:500;font-family:inherit;margin-left:8px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;padding:14px 16px;background:#fff;border:1px solid #E5E7EB;border-radius:8px;align-items:center}
+.filters span{font-size:12px;font-weight:600;color:#6B7280}
+.filters select{padding:6px 8px;border-radius:6px;border:1px solid #D1D5DB;font-size:13px;flex:1;min-width:110px}
+.clear-btn{background:none;border:1px solid #E5E7EB;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;color:#6B7280;font-family:inherit}
+.hist-card{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:12px 16px;display:flex;gap:14px;align-items:flex-start;margin-bottom:8px}
+.hist-period{min-width:60px;text-align:center;padding-top:2px}
+.hist-week{font-size:13px;font-weight:700;color:#374151}
+.hist-month-lbl{font-size:11px;color:#9CA3AF}
+.hist-meta{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+.empty{text-align:center;padding:60px 0;color:#9CA3AF;font-size:14px}
+.loading-screen{display:flex;align-items:center;justify-content:center;height:100vh;color:#6B7280;font-size:15px;flex-direction:column;gap:12px}
+.banner{background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#92400E}
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading-screen">
+  <div style="font-size:24px">📊</div>
+  <div>Loading SCMWeeklyUpdate…</div>
+</div>
+
+<div id="app" style="display:none">
+  <nav class="nav">
+    <span class="nav-brand">📊 SCMWeeklyUpdate</span>
+    <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+    <button class="nav-btn" data-page="add">+ Add Update</button>
+    <button class="nav-btn" data-page="history">History</button>
+  </nav>
+  <div class="main">
+    <div id="page-dashboard"></div>
+    <div id="page-add" style="display:none"></div>
+    <div id="page-history" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// ── STEP 1: PASTE YOUR APPS SCRIPT URL HERE AFTER DEPLOYING ──
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRY7lzbNq0Dl1FT-bTzA9FzKDyO1ebwoDzUqvdfRGJyiBN393pRuVWF-fgAZ-Cn2nLmg/exec';
+// ─────────────────────────────────────────────────────────────
+
+const DEPARTMENTS = ['Enviro','GFM','HRGA','Hauling','Infra','Mining','Permitting','PSE'];
+const PRIORITIES  = ['High','Medium','Low'];
+const WEEKS       = ['W1','W2','W3','W4'];
+const MONTHS      = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const PC = {
+  High:   {light:'#FEE2E2',text:'#991B1B',dot:'#EF4444'},
+  Medium: {light:'#FEF3C7',text:'#92400E',dot:'#F59E0B'},
+  Low:    {light:'#D1FAE5',text:'#065F46',dot:'#10B981'},
+};
+
+const now = new Date();
+const CUR_MONTH = now.getMonth();
+const CUR_WEEK  = 'W' + Math.min(Math.ceil(now.getDate()/7),4);
+
+let updates = [];
+let currentPage = 'dashboard';
+let dashMonth = CUR_MONTH;
+let dashWeek  = CUR_WEEK;
+let form = resetForm();
+let hMonth='', hWeek='', hDept='', hPri='';
+let formError='', formSaved=false, formSubmitting=false;
+let filteredForExport = [];
+
+function resetForm() {
+  return {
+    department:'', project:'', newProject:'', isNew:false,
+    update:'', priority:'Medium',
+    month:CUR_MONTH, week:CUR_WEEK,
+    date:now.toISOString().split('T')[0]
+  };
+}
+
+// ── API ──────────────────────────────────────────────────────
+async function fetchUpdates() {
+  if (SCRIPT_URL === 'PASTE_YOUR_SCRIPT_URL_HERE') return;
+  try {
+    const res = await fetch(SCRIPT_URL + '?action=getAll');
+    const data = await res.json();
+    updates = data.map(r => ({...r, month: parseInt(r.month)}));
+  } catch(e) { console.error('Fetch error:', e); }
+}
+
+async function submitUpdate(obj) {
+  const params = new URLSearchParams();
+  params.append('data', JSON.stringify(obj));
+  await fetch(SCRIPT_URL, { method:'POST', mode:'no-cors', body:params });
+  await new Promise(r => setTimeout(r, 1800));
+  await fetchUpdates();
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────
+function navigate(page) {
+  currentPage = page;
+  document.querySelectorAll('.nav-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.page === page));
+  ['dashboard','add','history'].forEach(p =>
+    document.getElementById('page-'+p).style.display = p===page ? 'block' : 'none');
+  if (page==='dashboard') renderDashboard();
+  if (page==='add') { form=resetForm(); formError=''; formSaved=false; formSubmitting=false; renderAdd(); }
+  if (page==='history') renderHistory();
+}
+
+function getProjects(dept) {
+  const seen = new Set();
+  updates.filter(u => u.department===dept).forEach(u => seen.add(u.project));
+  return [...seen].sort();
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────
+function renderDashboard() {
+  const wu = updates.filter(u => u.month===dashMonth && u.week===dashWeek);
+  const counts = {High:0,Medium:0,Low:0};
+  wu.forEach(u => counts[u.priority]++);
+  const byDept = {};
+  wu.forEach(u => { if(!byDept[u.department]) byDept[u.department]=[]; byDept[u.department].push(u); });
+
+  const notConfigured = SCRIPT_URL === 'PASTE_YOUR_SCRIPT_URL_HERE';
+
+  document.getElementById('page-dashboard').innerHTML = `
+    ${notConfigured ? `<div class="banner">⚠️ <strong>Setup needed:</strong> Open index.html dan ganti <code>PASTE_YOUR_SCRIPT_URL_HERE</code> dengan URL Apps Script kamu.</div>` : ''}
+    <div class="week-nav">
+      <button class="nav-arrow" onclick="prevWeek()">‹</button>
+      <h2>${dashWeek} — ${MONTHS[dashMonth]}</h2>
+      <button class="nav-arrow" onclick="nextWeek()">›</button>
+      <button class="refresh-btn" onclick="refreshDash()">↻ Refresh</button>
+    </div>
+    <div class="summary-grid">
+      <div class="card summary-card"><div class="summary-val" style="color:#3B82F6">${wu.length}</div><div class="summary-label">Total Updates</div></div>
+      <div class="card summary-card"><div class="summary-val" style="color:${PC.High.dot}">${counts.High}</div><div class="summary-label">🔴 High</div></div>
+      <div class="card summary-card"><div class="summary-val" style="color:${PC.Medium.dot}">${counts.Medium}</div><div class="summary-label">🟡 Medium</div></div>
+      <div class="card summary-card"><div class="summary-val" style="color:${PC.Low.dot}">${counts.Low}</div><div class="summary-label">🟢 Low</div></div>
+    </div>
+    ${wu.length===0
+      ? `<div class="empty">No updates logged for ${dashWeek} ${MONTHS[dashMonth]}</div>`
+      : Object.entries(byDept).sort().map(([dept,items])=>`
+        <div class="card" style="margin-bottom:14px">
+          <div class="dept-header">${dept} <span style="font-weight:400;color:#9CA3AF;font-size:12px">(${items.length} update${items.length>1?'s':''})</span></div>
+          <div class="dept-body">${items.map(u=>`
+            <div class="update-row">
+              <span class="badge" style="background:${PC[u.priority].light};color:${PC[u.priority].text}">${u.priority}</span>
+              <div style="flex:1">
+                <div style="font-weight:600;font-size:13px;color:#111827">${esc(u.project)}</div>
+                <div style="font-size:13px;color:#4B5563;margin-top:2px;line-height:1.5">${esc(u.update)}</div>
+                <div style="font-size:11px;color:#9CA3AF;margin-top:3px">${esc(u.date)}</div>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>`).join('')}
+  `;
+}
+
+async function refreshDash() {
+  document.getElementById('page-dashboard').innerHTML = '<div class="empty">Refreshing…</div>';
+  await fetchUpdates();
+  renderDashboard();
+}
+function prevWeek() {
+  const i=WEEKS.indexOf(dashWeek);
+  if(i>0) dashWeek=WEEKS[i-1]; else{dashWeek='W4';dashMonth=(dashMonth+11)%12;}
+  renderDashboard();
+}
+function nextWeek() {
+  const i=WEEKS.indexOf(dashWeek);
+  if(i<3) dashWeek=WEEKS[i+1]; else{dashWeek='W1';dashMonth=(dashMonth+1)%12;}
+  renderDashboard();
+}
+
+// ── ADD UPDATE ───────────────────────────────────────────────
+function renderAdd() {
+  const deptProjects = getProjects(form.department);
+  document.getElementById('page-add').innerHTML = `
+    <div class="form-wrap">
+      <div class="form-title">Add Project Update</div>
+      <div class="field">
+        <label>Department</label>
+        <select onchange="setFormDept(this.value)">
+          <option value="">Select department…</option>
+          ${DEPARTMENTS.map(d=>`<option ${form.department===d?'selected':''}>${d}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Project</label>
+        <select onchange="setFormProject(this.value)" ${!form.department?'disabled':''}>
+          <option value="">Select project…</option>
+          ${deptProjects.map(p=>`<option value="${esc(p)}" ${form.project===p&&!form.isNew?'selected':''}>${esc(p)}</option>`).join('')}
+          <option value="__new__" ${form.isNew?'selected':''}>+ Add new project</option>
+        </select>
+        ${form.isNew?`<input style="margin-top:8px" placeholder="Enter new project name" value="${esc(form.newProject)}" oninput="form.newProject=this.value">`:``}
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Month</label>
+          <select onchange="form.month=+this.value">
+            ${MONTHS.map((m,i)=>`<option value="${i}" ${form.month===i?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>Week</label>
+          <select onchange="form.week=this.value">
+            ${WEEKS.map(w=>`<option ${form.week===w?'selected':''}>${w}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input type="date" value="${form.date}" onchange="form.date=this.value">
+        </div>
+      </div>
+      <div class="field">
+        <label>Priority</label>
+        <div class="priority-row">
+          ${PRIORITIES.map(p=>`
+            <button class="pri-btn" onclick="setPriority('${p}')"
+              style="border-color:${form.priority===p?PC[p].dot:'#E5E7EB'};background:${form.priority===p?PC[p].light:'#fff'};color:${form.priority===p?PC[p].text:'#6B7280'}">
+              ${p}
+            </button>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <label>Update</label>
+        <textarea rows="4" placeholder="Describe the project update…" oninput="form.update=this.value">${esc(form.update)}</textarea>
+      </div>
+      ${formError?`<div class="error-msg">${formError}</div>`:''}
+      <button class="submit-btn ${formSaved?'saved':''}" onclick="handleSubmit()" ${formSubmitting?'disabled':''}>
+        ${formSaved?'✓ Saved!':formSubmitting?'Saving…':'Submit Update'}
+      </button>
+    </div>
+  `;
+}
+
+function setFormDept(v){form.department=v;form.project='';form.isNew=false;renderAdd();}
+function setFormProject(v){if(v==='__new__'){form.isNew=true;form.project='';}else{form.isNew=false;form.project=v;}renderAdd();}
+function setPriority(p){form.priority=p;renderAdd();}
+
+async function handleSubmit() {
+  formError='';
+  if(!form.department){formError='Please select a department.';return renderAdd();}
+  const proj=form.isNew?form.newProject.trim():form.project;
+  if(!proj){formError='Please enter or select a project name.';return renderAdd();}
+  if(!form.update.trim()){formError='Please enter an update.';return renderAdd();}
+
+  formSubmitting=true; renderAdd();
+  const obj={
+    id:Date.now().toString(),
+    department:form.department, project:proj,
+    update:form.update.trim(), priority:form.priority,
+    month:form.month, week:form.week, date:form.date
+  };
+  await submitUpdate(obj);
+  formSubmitting=false; formSaved=true; renderAdd();
+  setTimeout(()=>navigate('dashboard'),1200);
+}
+
+// ── HISTORY ──────────────────────────────────────────────────
+function renderHistory() {
+  filteredForExport = updates.filter(u=>{
+    if(hMonth!==''&&u.month!==+hMonth) return false;
+    if(hWeek&&u.week!==hWeek)         return false;
+    if(hDept&&u.department!==hDept)   return false;
+    if(hPri&&u.priority!==hPri)       return false;
+    return true;
+  }).sort((a,b)=>b.id.localeCompare(a.id));
+
+  document.getElementById('page-history').innerHTML = `
+    <div class="history-header">
+      <h2 style="font-size:19px;font-weight:700;color:#111827">Update History</h2>
+      <div>
+        <button class="refresh-btn" onclick="doRefreshHistory()">↻ Refresh</button>
+        <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+      </div>
+    </div>
+    <div class="filters">
+      <span>Filter:</span>
+      <select onchange="hMonth=this.value;renderHistory()">
+        <option value="">All Months</option>
+        ${MONTHS.map((m,i)=>`<option value="${i}" ${hMonth===String(i)?'selected':''}>${m}</option>`).join('')}
+      </select>
+      <select onchange="hWeek=this.value;renderHistory()">
+        <option value="">All Weeks</option>
+        ${WEEKS.map(w=>`<option ${hWeek===w?'selected':''}>${w}</option>`).join('')}
+      </select>
+      <select onchange="hDept=this.value;renderHistory()">
+        <option value="">All Departments</option>
+        ${DEPARTMENTS.map(d=>`<option ${hDept===d?'selected':''}>${d}</option>`).join('')}
+      </select>
+      <select onchange="hPri=this.value;renderHistory()">
+        <option value="">All Priorities</option>
+        ${PRIORITIES.map(p=>`<option ${hPri===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+      ${(hMonth||hWeek||hDept||hPri)?`<button class="clear-btn" onclick="hMonth='';hWeek='';hDept='';hPri='';renderHistory()">Clear</button>`:''}
+    </div>
+    <div style="font-size:12px;color:#6B7280;margin-bottom:12px">${filteredForExport.length} update${filteredForExport.length!==1?'s':''} found</div>
+    ${filteredForExport.length===0
+      ? '<div class="empty">No updates match the selected filters</div>'
+      : filteredForExport.map(u=>`
+        <div class="hist-card">
+          <div class="hist-period">
+            <div class="hist-week">${u.week}</div>
+            <div class="hist-month-lbl">${MONTHS[u.month]?MONTHS[u.month].slice(0,3):''}</div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="hist-meta">
+              <span style="font-size:12px;color:#6B7280;font-weight:500">${esc(u.department)}</span>
+              <span style="color:#D1D5DB">·</span>
+              <span style="font-size:13px;font-weight:700;color:#111827">${esc(u.project)}</span>
+              <span class="badge" style="margin-left:auto;background:${PC[u.priority]?.light};color:${PC[u.priority]?.text}">${u.priority}</span>
+            </div>
+            <div style="font-size:13px;color:#374151;line-height:1.55">${esc(u.update)}</div>
+            <div style="font-size:11px;color:#9CA3AF;margin-top:4px">${esc(u.date)}</div>
+          </div>
+        </div>`).join('')}
+  `;
+}
+
+async function doRefreshHistory(){
+  document.getElementById('page-history').innerHTML='<div class="empty">Refreshing…</div>';
+  await fetchUpdates();renderHistory();
+}
+
+function exportCSV() {
+  const rows=[['Period','Department','Project','Priority','Update','Date']];
+  filteredForExport.forEach(u=>rows.push([`${u.week} ${MONTHS[u.month]}`,u.department,u.project,u.priority,u.update,u.date]));
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='scm_updates.csv'; a.click();
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+(async()=>{
+  await fetchUpdates();
+  document.getElementById('loading').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.querySelectorAll('.nav-btn').forEach(b=>
+    b.addEventListener('click',()=>navigate(b.dataset.page)));
+  renderDashboard();
+})();
+</script>
+</body>
+</html>
