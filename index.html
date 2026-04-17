@@ -120,10 +120,12 @@ function resetForm(){
 
 // ── API — all via GET to avoid CORS issues ───────────────────
 async function apiCall(action, data) {
+  // Apps Script auto-decodes URL params — only encode once
   let url = SCRIPT_URL + '?action=' + action;
   if (data) url += '&data=' + encodeURIComponent(JSON.stringify(data));
-  const res = await fetch(url);
-  return res.json();
+  const res = await fetch(url, { redirect: 'follow' });
+  const text = await res.text();
+  try { return JSON.parse(text); } catch(e) { console.error('API response:', text); throw e; }
 }
 
 async function fetchAll() {
