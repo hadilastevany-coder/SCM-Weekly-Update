@@ -36,16 +36,17 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#F9FAFB;min-heigh
 .pri-btn{flex:1;padding:7px 0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;border:2px solid #E5E7EB;background:#fff;color:#6B7280;font-family:inherit}
 .submit-btn{background:#3B82F6;color:#fff;border:none;border-radius:7px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer;min-width:140px;font-family:inherit}
 .submit-btn.saved{background:#10B981}
+.submit-btn:disabled{background:#9CA3AF;cursor:not-allowed}
 .save-proj-btn{background:#10B981;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
 .save-proj-btn:disabled{background:#9CA3AF;cursor:not-allowed}
 .new-proj-row{display:flex;gap:8px;margin-top:8px;align-items:center}
 .new-proj-row input{flex:1;padding:8px 10px;border-radius:6px;border:1px solid #D1D5DB;font-size:13px;font-family:inherit}
 .proj-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .proj-tag{display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;padding:3px 8px;font-size:12px;color:#374151}
-.proj-tag-del{background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:14px;line-height:1;padding:0 0 0 2px;font-family:inherit}
+.proj-tag-del{background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:15px;line-height:1;padding:0 0 0 2px;font-family:inherit}
 .proj-tag-del:hover{color:#EF4444}
-.proj-saved-msg{color:#10B981;font-size:12px;margin-top:4px;font-weight:500}
-.error-msg{color:#DC2626;font-size:13px;margin-bottom:12px}
+.proj-saved-msg{color:#10B981;font-size:12px;margin-top:6px;font-weight:500}
+.error-msg{color:#DC2626;font-size:13px;margin-bottom:12px;padding:8px 12px;background:#FEE2E2;border-radius:6px}
 .history-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
 .export-btn{background:#fff;border:1px solid #D1D5DB;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;color:#374151;font-weight:500;font-family:inherit}
 .refresh-btn{background:#fff;border:1px solid #D1D5DB;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;color:#374151;font-weight:500;font-family:inherit;margin-left:8px}
@@ -60,6 +61,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#F9FAFB;min-heigh
 .hist-meta{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
 .empty{text-align:center;padding:60px 0;color:#9CA3AF;font-size:14px}
 .loading-screen{display:flex;align-items:center;justify-content:center;height:100vh;color:#6B7280;font-size:15px;flex-direction:column;gap:12px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:999;display:none}
 </style>
 </head>
 <body>
@@ -82,6 +84,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#F9FAFB;min-heigh
     <div id="page-history" style="display:none"></div>
   </div>
 </div>
+<div class="toast" id="toast"></div>
 
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbypF9fSqQ5Ee1mpB3tm9yWKn-LAqPko1d8hhyPl99LsEJYziUVt043mQzWdLmT-R3e8WA/exec';
@@ -101,8 +104,7 @@ const CUR_MONTH = now.getMonth();
 const CUR_WEEK  = 'W' + Math.min(Math.ceil(now.getDate()/7),4);
 
 let updates  = [];
-let projects = []; // {department, name}
-let currentPage = 'dashboard';
+let projects = [];
 let dashMonth = CUR_MONTH, dashWeek = CUR_WEEK;
 let form = resetForm();
 let formError='', formSaved=false, formSubmitting=false;
@@ -110,65 +112,59 @@ let projSavedMsg='', projSaving=false;
 let hMonth='', hWeek='', hDept='', hPri='';
 let filteredForExport = [];
 
-function resetForm() {
-  return {
-    department:'', project:'', newProject:'', isNew:false,
-    update:'', priority:'Medium',
-    month:CUR_MONTH, week:CUR_WEEK,
-    date: now.toISOString().split('T')[0]
-  };
+function resetForm(){
+  return { department:'', project:'', newProject:'', isNew:false,
+    update:'', priority:'Medium', month:CUR_MONTH, week:CUR_WEEK,
+    date: now.toISOString().split('T')[0] };
 }
 
-// ── API ──────────────────────────────────────────────────────
+// ── API — all via GET to avoid CORS issues ───────────────────
+async function apiCall(action, data) {
+  let url = SCRIPT_URL + '?action=' + action;
+  if (data) url += '&data=' + encodeURIComponent(JSON.stringify(data));
+  const res = await fetch(url);
+  return res.json();
+}
+
 async function fetchAll() {
   try {
     const [u, p] = await Promise.all([
-      fetch(SCRIPT_URL + '?action=getUpdates').then(r=>r.json()),
-      fetch(SCRIPT_URL + '?action=getProjects').then(r=>r.json()),
+      apiCall('getUpdates'),
+      apiCall('getProjects'),
     ]);
-    updates  = u.map(r=>({...r, month:parseInt(r.month)}));
-    projects = p;
-  } catch(e) { console.error(e); }
+    updates  = Array.isArray(u) ? u.map(r=>({...r, month:parseInt(r.month)})) : [];
+    projects = Array.isArray(p) ? p : [];
+  } catch(e) { console.error('fetchAll error:', e); }
 }
 
-async function apiPost(action, data) {
-  const params = new URLSearchParams();
-  params.append('action', action);
-  params.append('data', JSON.stringify(data));
-  await fetch(SCRIPT_URL, { method:'POST', mode:'no-cors', body:params });
-  await new Promise(r=>setTimeout(r,1800));
+function getDeptProjects(dept) {
+  const fromUpdates  = [...new Set(updates.filter(u=>u.department===dept).map(u=>u.project))];
+  const fromProjects = projects.filter(p=>p.department===dept).map(p=>p.name);
+  return [...new Set([...fromProjects,...fromUpdates])].sort();
 }
 
-// ── NAV ──────────────────────────────────────────────────────
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',2500); }
+
+// ── NAVIGATE ─────────────────────────────────────────────────
 function navigate(page) {
-  currentPage = page;
-  document.querySelectorAll('.nav-btn').forEach(b=>
-    b.classList.toggle('active', b.dataset.page===page));
-  ['dashboard','add','history'].forEach(p=>
-    document.getElementById('page-'+p).style.display = p===page?'block':'none');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+  ['dashboard','add','history'].forEach(p=>document.getElementById('page-'+p).style.display=p===page?'block':'none');
   if(page==='dashboard') renderDashboard();
   if(page==='add'){ form=resetForm(); formError=''; formSaved=false; formSubmitting=false; projSavedMsg=''; renderAdd(); }
   if(page==='history') renderHistory();
 }
 
-function getDeptProjects(dept) {
-  const fromUpdates = [...new Set(updates.filter(u=>u.department===dept).map(u=>u.project))];
-  const fromProjects = projects.filter(p=>p.department===dept).map(p=>p.name);
-  const all = [...new Set([...fromProjects, ...fromUpdates])].sort();
-  return all;
-}
-
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
 // ── DASHBOARD ────────────────────────────────────────────────
-function renderDashboard() {
-  const wu = updates.filter(u=>u.month===dashMonth && u.week===dashWeek);
+function renderDashboard(){
+  const wu=updates.filter(u=>u.month===dashMonth&&u.week===dashWeek);
   const counts={High:0,Medium:0,Low:0};
   wu.forEach(u=>counts[u.priority]++);
   const byDept={};
   wu.forEach(u=>{ if(!byDept[u.department]) byDept[u.department]=[]; byDept[u.department].push(u); });
 
-  document.getElementById('page-dashboard').innerHTML = `
+  document.getElementById('page-dashboard').innerHTML=`
     <div class="week-nav">
       <button class="nav-arrow" onclick="prevWeek()">‹</button>
       <h2>${dashWeek} — ${MONTHS[dashMonth]}</h2>
@@ -182,8 +178,8 @@ function renderDashboard() {
       <div class="card summary-card"><div class="summary-val" style="color:${PC.Low.dot}">${counts.Low}</div><div class="summary-label">🟢 Low</div></div>
     </div>
     ${wu.length===0
-      ? `<div class="empty">No updates logged for ${dashWeek} ${MONTHS[dashMonth]}</div>`
-      : Object.entries(byDept).sort().map(([dept,items])=>`
+      ?`<div class="empty">No updates logged for ${dashWeek} ${MONTHS[dashMonth]}</div>`
+      :Object.entries(byDept).sort().map(([dept,items])=>`
         <div class="card" style="margin-bottom:14px">
           <div class="dept-header">${dept} <span style="font-weight:400;color:#9CA3AF;font-size:12px">(${items.length} update${items.length>1?'s':''})</span></div>
           <div class="dept-body">${items.map(u=>`
@@ -196,24 +192,22 @@ function renderDashboard() {
               </div>
             </div>`).join('')}
           </div>
-        </div>`).join('')}
-  `;
+        </div>`).join('')}`;
 }
 
 async function refreshDash(){
   document.getElementById('page-dashboard').innerHTML='<div class="empty">Refreshing…</div>';
-  await fetchAll(); renderDashboard();
+  await fetchAll(); renderDashboard(); showToast('Dashboard refreshed');
 }
 function prevWeek(){ const i=WEEKS.indexOf(dashWeek); if(i>0) dashWeek=WEEKS[i-1]; else{dashWeek='W4';dashMonth=(dashMonth+11)%12;} renderDashboard(); }
 function nextWeek(){ const i=WEEKS.indexOf(dashWeek); if(i<3) dashWeek=WEEKS[i+1]; else{dashWeek='W1';dashMonth=(dashMonth+1)%12;} renderDashboard(); }
 
 // ── ADD UPDATE ───────────────────────────────────────────────
-function renderAdd() {
-  const deptProjects = getDeptProjects(form.department);
-  document.getElementById('page-add').innerHTML = `
+function renderAdd(){
+  const deptProjects=getDeptProjects(form.department);
+  document.getElementById('page-add').innerHTML=`
     <div class="form-wrap">
       <div class="form-title">Add Project Update</div>
-
       <div class="field">
         <label>Department</label>
         <select onchange="setFormDept(this.value)">
@@ -221,7 +215,6 @@ function renderAdd() {
           ${DEPARTMENTS.map(d=>`<option value="${d}" ${form.department===d?'selected':''}>${d}</option>`).join('')}
         </select>
       </div>
-
       <div class="field">
         <label>Project</label>
         <select onchange="setFormProject(this.value)" ${!form.department?'disabled':''}>
@@ -229,128 +222,114 @@ function renderAdd() {
           ${deptProjects.map(p=>`<option value="${esc(p)}" ${form.project===p&&!form.isNew?'selected':''}>${esc(p)}</option>`).join('')}
           <option value="__new__" ${form.isNew?'selected':''}>+ Add new project</option>
         </select>
-
-        ${form.isNew ? `
+        ${form.isNew?`
           <div class="new-proj-row">
-            <input id="newProjInput" placeholder="Enter new project name…" value="${esc(form.newProject)}"
-              oninput="form.newProject=this.value">
+            <input id="newProjInput" placeholder="Enter new project name…" value="${esc(form.newProject)}" oninput="form.newProject=this.value">
             <button class="save-proj-btn" onclick="saveNewProject()" ${projSaving?'disabled':''}>
               ${projSaving?'Saving…':'💾 Save Project'}
             </button>
           </div>
           ${projSavedMsg?`<div class="proj-saved-msg">✓ ${esc(projSavedMsg)}</div>`:''}
-        ` : ''}
-
-        ${form.department && deptProjects.length>0 ? `
+        `:''}
+        ${form.department&&deptProjects.length>0?`
           <div class="proj-tags">
             ${deptProjects.map(p=>`
-              <span class="proj-tag">
-                ${esc(p)}
-                <button class="proj-tag-del" onclick="deleteProject('${esc(p)}')" title="Delete project">×</button>
+              <span class="proj-tag">${esc(p)}
+                <button class="proj-tag-del" onclick="deleteProject('${esc(p)}')" title="Delete">×</button>
               </span>`).join('')}
-          </div>
-        ` : ''}
+          </div>`:''}
       </div>
-
       <div class="field-row">
-        <div class="field">
-          <label>Month</label>
+        <div class="field"><label>Month</label>
           <select onchange="form.month=+this.value">
             ${MONTHS.map((m,i)=>`<option value="${i}" ${form.month===i?'selected':''}>${m}</option>`).join('')}
           </select>
         </div>
-        <div class="field">
-          <label>Week</label>
+        <div class="field"><label>Week</label>
           <select onchange="form.week=this.value">
             ${WEEKS.map(w=>`<option ${form.week===w?'selected':''}>${w}</option>`).join('')}
           </select>
         </div>
-        <div class="field">
-          <label>Date</label>
+        <div class="field"><label>Date</label>
           <input type="date" value="${form.date}" onchange="form.date=this.value">
         </div>
       </div>
-
-      <div class="field">
-        <label>Priority</label>
+      <div class="field"><label>Priority</label>
         <div class="priority-row">
           ${PRIORITIES.map(p=>`
             <button class="pri-btn" onclick="setPriority('${p}')"
               style="border-color:${form.priority===p?PC[p].dot:'#E5E7EB'};background:${form.priority===p?PC[p].light:'#fff'};color:${form.priority===p?PC[p].text:'#6B7280'}">
-              ${p}
-            </button>`).join('')}
+              ${p}</button>`).join('')}
         </div>
       </div>
-
-      <div class="field">
-        <label>Update</label>
+      <div class="field"><label>Update</label>
         <textarea rows="4" placeholder="Describe the project update…" oninput="form.update=this.value">${esc(form.update)}</textarea>
       </div>
-
-      ${formError?`<div class="error-msg">${formError}</div>`:''}
+      ${formError?`<div class="error-msg">⚠️ ${formError}</div>`:''}
       <button class="submit-btn ${formSaved?'saved':''}" onclick="handleSubmit()" ${formSubmitting?'disabled':''}>
         ${formSaved?'✓ Saved!':formSubmitting?'Submitting…':'Submit Update'}
       </button>
-    </div>
-  `;
+    </div>`;
 }
 
 function setFormDept(v){ form.department=v; form.project=''; form.isNew=false; form.newProject=''; projSavedMsg=''; renderAdd(); }
-function setFormProject(v){
-  if(v==='__new__'){ form.isNew=true; form.project=''; }
-  else { form.isNew=false; form.project=v; }
-  projSavedMsg=''; renderAdd();
-}
+function setFormProject(v){ if(v==='__new__'){form.isNew=true;form.project='';}else{form.isNew=false;form.project=v;} projSavedMsg=''; renderAdd(); }
 function setPriority(p){ form.priority=p; renderAdd(); }
 
-async function saveNewProject() {
-  const name = (document.getElementById('newProjInput')?.value || form.newProject).trim();
+async function saveNewProject(){
+  const name=(document.getElementById('newProjInput')?.value||form.newProject).trim();
   if(!name) return;
-  form.newProject = name;
+  form.newProject=name;
   projSaving=true; renderAdd();
-
-  await apiPost('addProject', { department: form.department, name });
-  await fetchAll();
-
-  // auto-select the saved project
-  form.isNew=false;
-  form.project=name;
-  form.newProject='';
-  projSaving=false;
-  projSavedMsg=`"${name}" saved and selected!`;
-  renderAdd();
-  setTimeout(()=>{ projSavedMsg=''; renderAdd(); }, 2500);
+  try {
+    await apiCall('addProject',{department:form.department,name});
+    await fetchAll();
+    form.isNew=false; form.project=name; form.newProject='';
+    projSavedMsg=`"${name}" saved!`;
+  } catch(e) {
+    projSavedMsg='';
+    formError='Failed to save project. Try again.';
+  }
+  projSaving=false; renderAdd();
+  setTimeout(()=>{ projSavedMsg=''; renderAdd(); },2500);
 }
 
-async function deleteProject(name) {
+async function deleteProject(name){
   if(!confirm(`Delete project "${name}"?\n(Existing updates will not be affected)`)) return;
-  await apiPost('deleteProject', { department: form.department, name });
+  await apiCall('deleteProject',{department:form.department,name});
   await fetchAll();
   if(form.project===name){ form.project=''; form.isNew=false; }
   renderAdd();
 }
 
-async function handleSubmit() {
+async function handleSubmit(){
   formError='';
   if(!form.department){ formError='Please select a department.'; return renderAdd(); }
   if(!form.project){ formError='Please select or save a project first.'; return renderAdd(); }
   if(!form.update.trim()){ formError='Please enter an update.'; return renderAdd(); }
 
   formSubmitting=true; renderAdd();
-  await apiPost('addUpdate', {
-    id: Date.now().toString(),
-    department:form.department, project:form.project,
-    update:form.update.trim(), priority:form.priority,
-    month:form.month, week:form.week, date:form.date
-  });
-  await fetchAll();
-  formSubmitting=false; formSaved=true; renderAdd();
-  setTimeout(()=>navigate('dashboard'), 1200);
+  try {
+    await apiCall('addUpdate',{
+      id:Date.now().toString(),
+      department:form.department, project:form.project,
+      update:form.update.trim(), priority:form.priority,
+      month:form.month, week:form.week, date:form.date
+    });
+    await fetchAll();
+    formSubmitting=false; formSaved=true; renderAdd();
+    showToast('Update saved! ✓');
+    setTimeout(()=>navigate('dashboard'),1200);
+  } catch(e) {
+    formSubmitting=false;
+    formError='Failed to submit. Please check your connection and try again.';
+    renderAdd();
+  }
 }
 
 // ── HISTORY ──────────────────────────────────────────────────
-function renderHistory() {
-  filteredForExport = updates.filter(u=>{
+function renderHistory(){
+  filteredForExport=updates.filter(u=>{
     if(hMonth!==''&&u.month!==+hMonth) return false;
     if(hWeek&&u.week!==hWeek)          return false;
     if(hDept&&u.department!==hDept)    return false;
@@ -358,7 +337,7 @@ function renderHistory() {
     return true;
   }).sort((a,b)=>b.id.localeCompare(a.id));
 
-  document.getElementById('page-history').innerHTML = `
+  document.getElementById('page-history').innerHTML=`
     <div class="history-header">
       <h2 style="font-size:19px;font-weight:700;color:#111827">Update History</h2>
       <div>
@@ -388,8 +367,8 @@ function renderHistory() {
     </div>
     <div style="font-size:12px;color:#6B7280;margin-bottom:12px">${filteredForExport.length} update${filteredForExport.length!==1?'s':''} found</div>
     ${filteredForExport.length===0
-      ? '<div class="empty">No updates match the selected filters</div>'
-      : filteredForExport.map(u=>`
+      ?'<div class="empty">No updates match the selected filters</div>'
+      :filteredForExport.map(u=>`
         <div class="hist-card">
           <div class="hist-period">
             <div class="hist-week">${u.week}</div>
@@ -405,8 +384,7 @@ function renderHistory() {
             <div style="font-size:13px;color:#374151;line-height:1.55">${esc(u.update)}</div>
             <div style="font-size:11px;color:#9CA3AF;margin-top:4px">${esc(u.date)}</div>
           </div>
-        </div>`).join('')}
-  `;
+        </div>`).join('')}`;
 }
 
 async function doRefreshHistory(){
