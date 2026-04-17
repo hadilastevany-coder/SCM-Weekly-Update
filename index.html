@@ -268,27 +268,28 @@ function renderAdd(){
       <div class="field">
         <label>Project</label>
         <select id="projectSelect" onchange="setFormProject(this.value)" ${!form.department?'disabled':''}>
-          <option value="">Select project…</option>
+          <option value="">Select existing project…</option>
           ${deptProjects.map(p=>`<option value="${esc(p)}" ${form.project===p?'selected':''}>${esc(p)}</option>`).join('')}
         </select>
 
-        ${form.department ? `
-          <div style="margin-top:10px;padding:10px 12px;background:#F8FAFC;border:1px solid #E5E7EB;border-radius:7px">
-            <div style="font-size:12px;font-weight:600;color:#6B7280;margin-bottom:6px">＋ Add new project</div>
-            <div class="new-proj-row">
-              <input id="newProjInput" placeholder="Type new project name…" value="${esc(form.newProject)}">
-              <button class="save-proj-btn" onclick="saveNewProject()" ${projSaving?'disabled':''}>
-                ${projSaving?'Saving…':'Save'}
-              </button>
-            </div>
-            ${projSavedMsg?`<div class="proj-saved-msg">✓ ${esc(projSavedMsg)}</div>`:''}
-          </div>` : ''}
+        <div style="margin-top:10px;padding:10px 12px;background:#F8FAFC;border:1px dashed #D1D5DB;border-radius:7px">
+          <div style="font-size:12px;font-weight:600;color:#6B7280;margin-bottom:6px">＋ Or add a new project</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="newProjInput" placeholder="Type new project name…" value="${esc(form.newProject)}"
+              style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #D1D5DB;font-size:13px;font-family:inherit"
+              ${!form.department?'disabled placeholder="Select a department first"':''}>
+            <button class="save-proj-btn" onclick="saveNewProject()" ${projSaving||!form.department?'disabled':''}>
+              ${projSaving?'Saving…':'Save'}
+            </button>
+          </div>
+          ${projSavedMsg?`<div class="proj-saved-msg">✓ ${esc(projSavedMsg)}</div>`:''}
+        </div>
 
-        ${form.department&&deptProjects.length>0?`
+        ${deptProjects.length>0?`
           <div class="proj-tags" style="margin-top:8px">
             ${deptProjects.map(p=>`
-              <span class="proj-tag" style="${form.project===p?'background:#DBEAFE;border-color:#93C5FD;':''}">${esc(p)}
-                <button class="proj-tag-del" onclick="deleteProject('${esc(p)}')" title="Delete">×</button>
+              <span class="proj-tag" style="${form.project===p?'background:#DBEAFE;border-color:#93C5FD;':''}">
+                ${esc(p)}<button class="proj-tag-del" onclick="deleteProject('${esc(p)}')" title="Delete">×</button>
               </span>`).join('')}
           </div>` : ''}
       </div>
