@@ -36,6 +36,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#F9FAFB;min-heigh
 .pri-btn{flex:1;padding:7px 0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;border:2px solid #E5E7EB;background:#fff;color:#6B7280;font-family:inherit}
 .submit-btn{background:#3B82F6;color:#fff;border:none;border-radius:7px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer;min-width:140px;font-family:inherit}
 .submit-btn.saved{background:#10B981}
+.save-proj-btn{background:#10B981;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
+.save-proj-btn:disabled{background:#9CA3AF;cursor:not-allowed}
+.new-proj-row{display:flex;gap:8px;margin-top:8px;align-items:center}
+.new-proj-row input{flex:1;padding:8px 10px;border-radius:6px;border:1px solid #D1D5DB;font-size:13px;font-family:inherit}
+.proj-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.proj-tag{display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;padding:3px 8px;font-size:12px;color:#374151}
+.proj-tag-del{background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:14px;line-height:1;padding:0 0 0 2px;font-family:inherit}
+.proj-tag-del:hover{color:#EF4444}
+.proj-saved-msg{color:#10B981;font-size:12px;margin-top:4px;font-weight:500}
 .error-msg{color:#DC2626;font-size:13px;margin-bottom:12px}
 .history-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
 .export-btn{background:#fff;border:1px solid #D1D5DB;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;color:#374151;font-weight:500;font-family:inherit}
@@ -51,7 +60,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#F9FAFB;min-heigh
 .hist-meta{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
 .empty{text-align:center;padding:60px 0;color:#9CA3AF;font-size:14px}
 .loading-screen{display:flex;align-items:center;justify-content:center;height:100vh;color:#6B7280;font-size:15px;flex-direction:column;gap:12px}
-.banner{background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#92400E}
 </style>
 </head>
 <body>
@@ -76,9 +84,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#F9FAFB;min-heigh
 </div>
 
 <script>
-// ── STEP 1: PASTE YOUR APPS SCRIPT URL HERE AFTER DEPLOYING ──
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRY7lzbNq0Dl1FT-bTzA9FzKDyO1ebwoDzUqvdfRGJyiBN393pRuVWF-fgAZ-Cn2nLmg/exec';
-// ─────────────────────────────────────────────────────────────
 
 const DEPARTMENTS = ['Enviro','GFM','HRGA','Hauling','Infra','Mining','Permitting','PSE'];
 const PRIORITIES  = ['High','Medium','Low'];
@@ -94,13 +100,14 @@ const now = new Date();
 const CUR_MONTH = now.getMonth();
 const CUR_WEEK  = 'W' + Math.min(Math.ceil(now.getDate()/7),4);
 
-let updates = [];
+let updates  = [];
+let projects = []; // {department, name}
 let currentPage = 'dashboard';
-let dashMonth = CUR_MONTH;
-let dashWeek  = CUR_WEEK;
+let dashMonth = CUR_MONTH, dashWeek = CUR_WEEK;
 let form = resetForm();
-let hMonth='', hWeek='', hDept='', hPri='';
 let formError='', formSaved=false, formSubmitting=false;
+let projSavedMsg='', projSaving=false;
+let hMonth='', hWeek='', hDept='', hPri='';
 let filteredForExport = [];
 
 function resetForm() {
@@ -108,62 +115,60 @@ function resetForm() {
     department:'', project:'', newProject:'', isNew:false,
     update:'', priority:'Medium',
     month:CUR_MONTH, week:CUR_WEEK,
-    date:now.toISOString().split('T')[0]
+    date: now.toISOString().split('T')[0]
   };
 }
 
 // ── API ──────────────────────────────────────────────────────
-async function fetchUpdates() {
-  if (SCRIPT_URL === 'PASTE_YOUR_SCRIPT_URL_HERE') return;
+async function fetchAll() {
   try {
-    const res = await fetch(SCRIPT_URL + '?action=getAll');
-    const data = await res.json();
-    updates = data.map(r => ({...r, month: parseInt(r.month)}));
-  } catch(e) { console.error('Fetch error:', e); }
+    const [u, p] = await Promise.all([
+      fetch(SCRIPT_URL + '?action=getUpdates').then(r=>r.json()),
+      fetch(SCRIPT_URL + '?action=getProjects').then(r=>r.json()),
+    ]);
+    updates  = u.map(r=>({...r, month:parseInt(r.month)}));
+    projects = p;
+  } catch(e) { console.error(e); }
 }
 
-async function submitUpdate(obj) {
+async function apiPost(action, data) {
   const params = new URLSearchParams();
-  params.append('data', JSON.stringify(obj));
+  params.append('action', action);
+  params.append('data', JSON.stringify(data));
   await fetch(SCRIPT_URL, { method:'POST', mode:'no-cors', body:params });
-  await new Promise(r => setTimeout(r, 1800));
-  await fetchUpdates();
+  await new Promise(r=>setTimeout(r,1800));
 }
 
-// ── NAVIGATION ───────────────────────────────────────────────
+// ── NAV ──────────────────────────────────────────────────────
 function navigate(page) {
   currentPage = page;
-  document.querySelectorAll('.nav-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.page === page));
-  ['dashboard','add','history'].forEach(p =>
-    document.getElementById('page-'+p).style.display = p===page ? 'block' : 'none');
-  if (page==='dashboard') renderDashboard();
-  if (page==='add') { form=resetForm(); formError=''; formSaved=false; formSubmitting=false; renderAdd(); }
-  if (page==='history') renderHistory();
+  document.querySelectorAll('.nav-btn').forEach(b=>
+    b.classList.toggle('active', b.dataset.page===page));
+  ['dashboard','add','history'].forEach(p=>
+    document.getElementById('page-'+p).style.display = p===page?'block':'none');
+  if(page==='dashboard') renderDashboard();
+  if(page==='add'){ form=resetForm(); formError=''; formSaved=false; formSubmitting=false; projSavedMsg=''; renderAdd(); }
+  if(page==='history') renderHistory();
 }
 
-function getProjects(dept) {
-  const seen = new Set();
-  updates.filter(u => u.department===dept).forEach(u => seen.add(u.project));
-  return [...seen].sort();
+function getDeptProjects(dept) {
+  const fromUpdates = [...new Set(updates.filter(u=>u.department===dept).map(u=>u.project))];
+  const fromProjects = projects.filter(p=>p.department===dept).map(p=>p.name);
+  const all = [...new Set([...fromProjects, ...fromUpdates])].sort();
+  return all;
 }
 
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── DASHBOARD ────────────────────────────────────────────────
 function renderDashboard() {
-  const wu = updates.filter(u => u.month===dashMonth && u.week===dashWeek);
-  const counts = {High:0,Medium:0,Low:0};
-  wu.forEach(u => counts[u.priority]++);
-  const byDept = {};
-  wu.forEach(u => { if(!byDept[u.department]) byDept[u.department]=[]; byDept[u.department].push(u); });
-
-  const notConfigured = SCRIPT_URL === 'PASTE_YOUR_SCRIPT_URL_HERE';
+  const wu = updates.filter(u=>u.month===dashMonth && u.week===dashWeek);
+  const counts={High:0,Medium:0,Low:0};
+  wu.forEach(u=>counts[u.priority]++);
+  const byDept={};
+  wu.forEach(u=>{ if(!byDept[u.department]) byDept[u.department]=[]; byDept[u.department].push(u); });
 
   document.getElementById('page-dashboard').innerHTML = `
-    ${notConfigured ? `<div class="banner">⚠️ <strong>Setup needed:</strong> Open index.html dan ganti <code>PASTE_YOUR_SCRIPT_URL_HERE</code> dengan URL Apps Script kamu.</div>` : ''}
     <div class="week-nav">
       <button class="nav-arrow" onclick="prevWeek()">‹</button>
       <h2>${dashWeek} — ${MONTHS[dashMonth]}</h2>
@@ -195,35 +200,28 @@ function renderDashboard() {
   `;
 }
 
-async function refreshDash() {
-  document.getElementById('page-dashboard').innerHTML = '<div class="empty">Refreshing…</div>';
-  await fetchUpdates();
-  renderDashboard();
+async function refreshDash(){
+  document.getElementById('page-dashboard').innerHTML='<div class="empty">Refreshing…</div>';
+  await fetchAll(); renderDashboard();
 }
-function prevWeek() {
-  const i=WEEKS.indexOf(dashWeek);
-  if(i>0) dashWeek=WEEKS[i-1]; else{dashWeek='W4';dashMonth=(dashMonth+11)%12;}
-  renderDashboard();
-}
-function nextWeek() {
-  const i=WEEKS.indexOf(dashWeek);
-  if(i<3) dashWeek=WEEKS[i+1]; else{dashWeek='W1';dashMonth=(dashMonth+1)%12;}
-  renderDashboard();
-}
+function prevWeek(){ const i=WEEKS.indexOf(dashWeek); if(i>0) dashWeek=WEEKS[i-1]; else{dashWeek='W4';dashMonth=(dashMonth+11)%12;} renderDashboard(); }
+function nextWeek(){ const i=WEEKS.indexOf(dashWeek); if(i<3) dashWeek=WEEKS[i+1]; else{dashWeek='W1';dashMonth=(dashMonth+1)%12;} renderDashboard(); }
 
 // ── ADD UPDATE ───────────────────────────────────────────────
 function renderAdd() {
-  const deptProjects = getProjects(form.department);
+  const deptProjects = getDeptProjects(form.department);
   document.getElementById('page-add').innerHTML = `
     <div class="form-wrap">
       <div class="form-title">Add Project Update</div>
+
       <div class="field">
         <label>Department</label>
         <select onchange="setFormDept(this.value)">
           <option value="">Select department…</option>
-          ${DEPARTMENTS.map(d=>`<option ${form.department===d?'selected':''}>${d}</option>`).join('')}
+          ${DEPARTMENTS.map(d=>`<option value="${d}" ${form.department===d?'selected':''}>${d}</option>`).join('')}
         </select>
       </div>
+
       <div class="field">
         <label>Project</label>
         <select onchange="setFormProject(this.value)" ${!form.department?'disabled':''}>
@@ -231,8 +229,29 @@ function renderAdd() {
           ${deptProjects.map(p=>`<option value="${esc(p)}" ${form.project===p&&!form.isNew?'selected':''}>${esc(p)}</option>`).join('')}
           <option value="__new__" ${form.isNew?'selected':''}>+ Add new project</option>
         </select>
-        ${form.isNew?`<input style="margin-top:8px" placeholder="Enter new project name" value="${esc(form.newProject)}" oninput="form.newProject=this.value">`:``}
+
+        ${form.isNew ? `
+          <div class="new-proj-row">
+            <input id="newProjInput" placeholder="Enter new project name…" value="${esc(form.newProject)}"
+              oninput="form.newProject=this.value">
+            <button class="save-proj-btn" onclick="saveNewProject()" ${projSaving?'disabled':''}>
+              ${projSaving?'Saving…':'💾 Save Project'}
+            </button>
+          </div>
+          ${projSavedMsg?`<div class="proj-saved-msg">✓ ${esc(projSavedMsg)}</div>`:''}
+        ` : ''}
+
+        ${form.department && deptProjects.length>0 ? `
+          <div class="proj-tags">
+            ${deptProjects.map(p=>`
+              <span class="proj-tag">
+                ${esc(p)}
+                <button class="proj-tag-del" onclick="deleteProject('${esc(p)}')" title="Delete project">×</button>
+              </span>`).join('')}
+          </div>
+        ` : ''}
       </div>
+
       <div class="field-row">
         <div class="field">
           <label>Month</label>
@@ -251,6 +270,7 @@ function renderAdd() {
           <input type="date" value="${form.date}" onchange="form.date=this.value">
         </div>
       </div>
+
       <div class="field">
         <label>Priority</label>
         <div class="priority-row">
@@ -261,48 +281,80 @@ function renderAdd() {
             </button>`).join('')}
         </div>
       </div>
+
       <div class="field">
         <label>Update</label>
         <textarea rows="4" placeholder="Describe the project update…" oninput="form.update=this.value">${esc(form.update)}</textarea>
       </div>
+
       ${formError?`<div class="error-msg">${formError}</div>`:''}
       <button class="submit-btn ${formSaved?'saved':''}" onclick="handleSubmit()" ${formSubmitting?'disabled':''}>
-        ${formSaved?'✓ Saved!':formSubmitting?'Saving…':'Submit Update'}
+        ${formSaved?'✓ Saved!':formSubmitting?'Submitting…':'Submit Update'}
       </button>
     </div>
   `;
 }
 
-function setFormDept(v){form.department=v;form.project='';form.isNew=false;renderAdd();}
-function setFormProject(v){if(v==='__new__'){form.isNew=true;form.project='';}else{form.isNew=false;form.project=v;}renderAdd();}
-function setPriority(p){form.priority=p;renderAdd();}
+function setFormDept(v){ form.department=v; form.project=''; form.isNew=false; form.newProject=''; projSavedMsg=''; renderAdd(); }
+function setFormProject(v){
+  if(v==='__new__'){ form.isNew=true; form.project=''; }
+  else { form.isNew=false; form.project=v; }
+  projSavedMsg=''; renderAdd();
+}
+function setPriority(p){ form.priority=p; renderAdd(); }
+
+async function saveNewProject() {
+  const name = (document.getElementById('newProjInput')?.value || form.newProject).trim();
+  if(!name) return;
+  form.newProject = name;
+  projSaving=true; renderAdd();
+
+  await apiPost('addProject', { department: form.department, name });
+  await fetchAll();
+
+  // auto-select the saved project
+  form.isNew=false;
+  form.project=name;
+  form.newProject='';
+  projSaving=false;
+  projSavedMsg=`"${name}" saved and selected!`;
+  renderAdd();
+  setTimeout(()=>{ projSavedMsg=''; renderAdd(); }, 2500);
+}
+
+async function deleteProject(name) {
+  if(!confirm(`Delete project "${name}"?\n(Existing updates will not be affected)`)) return;
+  await apiPost('deleteProject', { department: form.department, name });
+  await fetchAll();
+  if(form.project===name){ form.project=''; form.isNew=false; }
+  renderAdd();
+}
 
 async function handleSubmit() {
   formError='';
-  if(!form.department){formError='Please select a department.';return renderAdd();}
-  const proj=form.isNew?form.newProject.trim():form.project;
-  if(!proj){formError='Please enter or select a project name.';return renderAdd();}
-  if(!form.update.trim()){formError='Please enter an update.';return renderAdd();}
+  if(!form.department){ formError='Please select a department.'; return renderAdd(); }
+  if(!form.project){ formError='Please select or save a project first.'; return renderAdd(); }
+  if(!form.update.trim()){ formError='Please enter an update.'; return renderAdd(); }
 
   formSubmitting=true; renderAdd();
-  const obj={
-    id:Date.now().toString(),
-    department:form.department, project:proj,
+  await apiPost('addUpdate', {
+    id: Date.now().toString(),
+    department:form.department, project:form.project,
     update:form.update.trim(), priority:form.priority,
     month:form.month, week:form.week, date:form.date
-  };
-  await submitUpdate(obj);
+  });
+  await fetchAll();
   formSubmitting=false; formSaved=true; renderAdd();
-  setTimeout(()=>navigate('dashboard'),1200);
+  setTimeout(()=>navigate('dashboard'), 1200);
 }
 
 // ── HISTORY ──────────────────────────────────────────────────
 function renderHistory() {
   filteredForExport = updates.filter(u=>{
     if(hMonth!==''&&u.month!==+hMonth) return false;
-    if(hWeek&&u.week!==hWeek)         return false;
-    if(hDept&&u.department!==hDept)   return false;
-    if(hPri&&u.priority!==hPri)       return false;
+    if(hWeek&&u.week!==hWeek)          return false;
+    if(hDept&&u.department!==hDept)    return false;
+    if(hPri&&u.priority!==hPri)        return false;
     return true;
   }).sort((a,b)=>b.id.localeCompare(a.id));
 
@@ -359,25 +411,22 @@ function renderHistory() {
 
 async function doRefreshHistory(){
   document.getElementById('page-history').innerHTML='<div class="empty">Refreshing…</div>';
-  await fetchUpdates();renderHistory();
+  await fetchAll(); renderHistory();
 }
-
-function exportCSV() {
+function exportCSV(){
   const rows=[['Period','Department','Project','Priority','Update','Date']];
   filteredForExport.forEach(u=>rows.push([`${u.week} ${MONTHS[u.month]}`,u.department,u.project,u.priority,u.update,u.date]));
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='scm_updates.csv'; a.click();
 }
 
 // ── INIT ─────────────────────────────────────────────────────
 (async()=>{
-  await fetchUpdates();
+  await fetchAll();
   document.getElementById('loading').style.display='none';
   document.getElementById('app').style.display='block';
-  document.querySelectorAll('.nav-btn').forEach(b=>
-    b.addEventListener('click',()=>navigate(b.dataset.page)));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
   renderDashboard();
 })();
 </script>
