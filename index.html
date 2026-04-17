@@ -119,13 +119,22 @@ function resetForm(){
 }
 
 // ── API — all via GET to avoid CORS issues ───────────────────
+// GET for reads, POST for writes (avoids URL length limits for long update text)
 async function apiCall(action, data) {
-  // Apps Script auto-decodes URL params — only encode once
-  let url = SCRIPT_URL + '?action=' + action;
-  if (data) url += '&data=' + encodeURIComponent(JSON.stringify(data));
-  const res = await fetch(url, { redirect: 'follow' });
-  const text = await res.text();
-  try { return JSON.parse(text); } catch(e) { console.error('API response:', text); throw e; }
+  if (!data) {
+    // READ — GET request
+    const url = SCRIPT_URL + '?action=' + action;
+    const res = await fetch(url);
+    return res.json();
+  } else {
+    // WRITE — POST with text/plain (no CORS preflight, no URL length limit)
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, data })
+    });
+    return res.json();
+  }
 }
 
 async function fetchAll() {
@@ -146,6 +155,8 @@ function getDeptProjects(dept) {
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// preserve line breaks when displaying update text
+function escUpdate(s){ return esc(s).replace(/\n/g,'<br>'); }
 
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',2500); }
 
@@ -189,7 +200,7 @@ function renderDashboard(){
               <span class="badge" style="background:${PC[u.priority].light};color:${PC[u.priority].text}">${u.priority}</span>
               <div style="flex:1">
                 <div style="font-weight:600;font-size:13px;color:#111827">${esc(u.project)}</div>
-                <div style="font-size:13px;color:#4B5563;margin-top:2px;line-height:1.5">${esc(u.update)}</div>
+                <div style="font-size:13px;color:#4B5563;margin-top:2px;line-height:1.6">${escUpdate(u.update)}</div>
                 <div style="font-size:11px;color:#9CA3AF;margin-top:3px">${esc(u.date)}</div>
               </div>
             </div>`).join('')}
@@ -383,7 +394,7 @@ function renderHistory(){
               <span style="font-size:13px;font-weight:700;color:#111827">${esc(u.project)}</span>
               <span class="badge" style="margin-left:auto;background:${PC[u.priority]?.light};color:${PC[u.priority]?.text}">${u.priority}</span>
             </div>
-            <div style="font-size:13px;color:#374151;line-height:1.55">${esc(u.update)}</div>
+            <div style="font-size:13px;color:#374151;line-height:1.6">${escUpdate(u.update)}</div>
             <div style="font-size:11px;color:#9CA3AF;margin-top:4px">${esc(u.date)}</div>
           </div>
         </div>`).join('')}`;
