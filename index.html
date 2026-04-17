@@ -252,19 +252,19 @@ function renderAdd(){
               </span>`).join('')}
           </div>`:''}
       </div>
-      <div class="field-row">
+        <div class="field-row">
         <div class="field"><label>Month</label>
-          <select onchange="form.month=+this.value">
+          <select id="monthInput" onchange="form.month=+this.value">
             ${MONTHS.map((m,i)=>`<option value="${i}" ${form.month===i?'selected':''}>${m}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>Week</label>
-          <select onchange="form.week=this.value">
+          <select id="weekInput" onchange="form.week=this.value">
             ${WEEKS.map(w=>`<option ${form.week===w?'selected':''}>${w}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>Date</label>
-          <input type="date" value="${form.date}" onchange="form.date=this.value">
+          <input id="dateInput" type="date" value="${form.date}" onchange="form.date=this.value">
         </div>
       </div>
       <div class="field"><label>Priority</label>
@@ -276,7 +276,7 @@ function renderAdd(){
         </div>
       </div>
       <div class="field"><label>Update</label>
-        <textarea rows="4" placeholder="Describe the project update…" oninput="form.update=this.value">${esc(form.update)}</textarea>
+        <textarea id="updateInput" rows="4" placeholder="Describe the project update…">${esc(form.update)}</textarea>
       </div>
       ${formError?`<div class="error-msg">⚠️ ${formError}</div>`:''}
       <button class="submit-btn ${formSaved?'saved':''}" onclick="handleSubmit()" ${formSubmitting?'disabled':''}>
@@ -317,10 +317,22 @@ async function deleteProject(name){
 
 async function handleSubmit(){
   formError='';
-  if(!form.department){ formError='Please select a department.'; return renderAdd(); }
-  if(!form.project){ formError='Please select or save a project first.'; return renderAdd(); }
-  if(!form.update.trim()){ formError='Please enter an update.'; return renderAdd(); }
 
+  // Read directly from DOM — not from form object (more reliable)
+  const updateVal = (document.getElementById('updateInput')?.value || '').trim();
+  const monthVal  = document.getElementById('monthInput')?.value;
+  const weekVal   = document.getElementById('weekInput')?.value;
+  const dateVal   = document.getElementById('dateInput')?.value;
+
+  if(monthVal) form.month = +monthVal;
+  if(weekVal)  form.week  = weekVal;
+  if(dateVal)  form.date  = dateVal;
+
+  if(!form.department){ formError='Please select a department.'; return renderAdd(); }
+  if(!form.project)   { formError='Please select or save a project first.'; return renderAdd(); }
+  if(!updateVal)      { formError='Please enter an update.'; return renderAdd(); }
+
+  form.update = updateVal;
   formSubmitting=true; renderAdd();
   try {
     await apiCall('addUpdate',{
