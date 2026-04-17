@@ -267,27 +267,30 @@ function renderAdd(){
       </div>
       <div class="field">
         <label>Project</label>
-        <select onchange="setFormProject(this.value)" ${!form.department?'disabled':''}>
+        <select id="projectSelect" onchange="setFormProject(this.value)" ${!form.department?'disabled':''}>
           <option value="">Select project…</option>
-          ${deptProjects.map(p=>`<option value="${esc(p)}" ${form.project===p&&!form.isNew?'selected':''}>${esc(p)}</option>`).join('')}
-          <option value="__new__" ${form.isNew?'selected':''}>+ Add new project</option>
+          ${deptProjects.map(p=>`<option value="${esc(p)}" ${form.project===p?'selected':''}>${esc(p)}</option>`).join('')}
         </select>
-        ${form.isNew?`
-          <div class="new-proj-row">
-            <input id="newProjInput" placeholder="Enter new project name…" value="${esc(form.newProject)}" oninput="form.newProject=this.value">
-            <button class="save-proj-btn" onclick="saveNewProject()" ${projSaving?'disabled':''}>
-              ${projSaving?'Saving…':'💾 Save Project'}
-            </button>
-          </div>
-          ${projSavedMsg?`<div class="proj-saved-msg">✓ ${esc(projSavedMsg)}</div>`:''}
-        `:''}
+
+        ${form.department ? `
+          <div style="margin-top:10px;padding:10px 12px;background:#F8FAFC;border:1px solid #E5E7EB;border-radius:7px">
+            <div style="font-size:12px;font-weight:600;color:#6B7280;margin-bottom:6px">＋ Add new project</div>
+            <div class="new-proj-row">
+              <input id="newProjInput" placeholder="Type new project name…" value="${esc(form.newProject)}">
+              <button class="save-proj-btn" onclick="saveNewProject()" ${projSaving?'disabled':''}>
+                ${projSaving?'Saving…':'Save'}
+              </button>
+            </div>
+            ${projSavedMsg?`<div class="proj-saved-msg">✓ ${esc(projSavedMsg)}</div>`:''}
+          </div>` : ''}
+
         ${form.department&&deptProjects.length>0?`
-          <div class="proj-tags">
+          <div class="proj-tags" style="margin-top:8px">
             ${deptProjects.map(p=>`
-              <span class="proj-tag">${esc(p)}
+              <span class="proj-tag" style="${form.project===p?'background:#DBEAFE;border-color:#93C5FD;':''}">${esc(p)}
                 <button class="proj-tag-del" onclick="deleteProject('${esc(p)}')" title="Delete">×</button>
               </span>`).join('')}
-          </div>`:''}
+          </div>` : ''}
       </div>
         <div class="field-row">
         <div class="field"><label>Month</label>
@@ -323,7 +326,7 @@ function renderAdd(){
 }
 
 function setFormDept(v){ form.department=v; form.project=''; form.isNew=false; form.newProject=''; projSavedMsg=''; renderAdd(); }
-function setFormProject(v){ if(v==='__new__'){form.isNew=true;form.project='';}else{form.isNew=false;form.project=v;} projSavedMsg=''; renderAdd(); }
+function setFormProject(v){ form.project=v; form.isNew=false; projSavedMsg=''; renderAdd(); }
 function setPriority(p){ form.priority=p; renderAdd(); }
 
 async function saveNewProject(){
